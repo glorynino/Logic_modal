@@ -1,12 +1,13 @@
 import tkinter as tk
 from tkinter import ttk
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 # Définition de l'automate
-states = {'q0', 'q1', 'q2', 'sink'}
-alphabet = {'A', '□', '◇', '∧', '∨', '¬', '→','B','(',')'}
+states = {'q0', 'q1', 'q2', 'q3', 'q4', 'sink'}
+alphabet = {'A', '□', '◇', '∧', '∨', '¬', '→', 'B', '(', ')'}
 initial_state = 'q0'
 accepting_states = {'q0', 'q2'}
-
 
 transition = {
     # q0 : début ou après opérateur logique
@@ -26,6 +27,7 @@ transition = {
     # q2 : après une proposition, on attend un opérateur logique ou fermeture
     ('q2', '∧'): 'q0',
     ('q2', '∨'): 'q0',
+    ('q2', '→'): 'q0',
     ('q2', ')'): 'q0',
     ('q2', 'A'): 'sink',
     ('q2', 'B'): 'sink',
@@ -43,6 +45,7 @@ transition = {
     # q4 : à l’intérieur d’une parenthèse après une proposition
     ('q4', '∧'): 'q3',
     ('q4', '∨'): 'q3',
+    ('q4', '→'): 'q3',
     ('q4', ')'): 'q0',
     ('q4', 'A'): 'sink',
     ('q4', 'B'): 'sink',
@@ -59,9 +62,8 @@ transition = {
     ('sink', ')'): 'sink',
     ('sink', '∧'): 'sink',
     ('sink', '∨'): 'sink',
+    ('sink', '→'): 'sink',
 }
-
-
 
 def run_dfa(input_string):
     current_state = initial_state
@@ -71,7 +73,6 @@ def run_dfa(input_string):
         current_state = transition.get((current_state, symbol), 'sink')
         print(f"Après lecture de '{symbol}', état actuel : {current_state}")
     return (True, "✅ Chaîne acceptée") if current_state in accepting_states else (False, "❌ Chaîne rejetée")
-
 
 # Fonction pour tester la chaîne entrée
 def test_string():
@@ -108,7 +109,7 @@ entry = ttk.Entry(main_frame, width=30, font=("Arial", 12))
 entry.grid(row=1, column=0, columnspan=3, pady=5)
 
 # Boutons de sélection des symboles
-symbols = ['A', '□', '◇', '→', '∧', '∨', '¬','B','(',')']
+symbols = ['A', '□', '◇', '→', '∧', '∨', '¬', 'B', '(', ')']
 symbol_frame = tk.Frame(main_frame, bg="#2C3E50")
 symbol_frame.grid(row=2, column=0, columnspan=3, pady=10)
 
