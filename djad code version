@@ -128,15 +128,21 @@ for i, sym in enumerate(symbols):
     ttk.Button(symbol_frame, text=sym, width=4, command=lambda s=sym: insert_symbol(s)).grid(row=i // 4, column=i % 4, padx=5, pady=5)
 
 # Bouton "Tester"
-test_button = ttk.Button(main_frame, text="Tester", command=test_string)
+test_button = ttk.Button(main_frame, text="Tester la syntaxe", command=test_string)
 test_button.grid(row=3, column=0, columnspan=3, pady=10)
+
+# Boutton "Tester la veracite"
+veracite_button = ttk.Button(main_frame, text="Tester la veracite", command=test_string)
+veracite_button.grid(row=3, column=3, columnspan=3, pady=10)
+
 
 # Label pour afficher le résultat
 result_label = ttk.Label(main_frame, text="", font=("Arial", 14, "bold"))
 result_label.grid(row=4, column=0, columnspan=3, pady=10)
 
+
 # Bouton "Quitter"
-quit_button = ttk.Button(main_frame, text="Quitter", command=quit_app)
+quit_button = ttk.Button(main_frame ,text="Quitter" ,command=quit_app)
 quit_button.grid(row=5, column=0, columnspan=3, pady=10)
 
 # Lancer l'application
