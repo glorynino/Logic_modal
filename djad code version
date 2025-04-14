@@ -105,14 +105,26 @@ root.title("Testeur d'automate")
 root.geometry("600x600")
 root.configure(bg="#2C3E50")
 
+# layout grid pour permettre l'expansion ver/hor
+root.grid_rowconfigure(0, weight=1)
+root.grid_columnconfigure(0, weight=1)
+
+# Frame qui se centre dynamiquement
+container = tk.Frame(root, bg="#2C3E50")
+container.grid(row=0, column=0, sticky="nsew")  # all directions
+
+# Centrage du contenu dans le conteneur
+container.grid_rowconfigure(0, weight=1)
+container.grid_columnconfigure(0, weight=1)
+
+# Conteneur principal pour les widgets
+main_frame = tk.Frame(container, bg="#2C3E50")
+main_frame.grid(row=0, column=0)
+
 # Style pour un look moderne
 style = ttk.Style()
 style.configure("TButton", font=("Arial", 12), padding=5)
 style.configure("TLabel", background="#2C3E50", foreground="white", font=("Arial", 12))
-
-# Conteneur principal
-main_frame = tk.Frame(root, bg="#2C3E50")
-main_frame.pack(pady=20)
 
 # Label + Entrée utilisateur
 ttk.Label(main_frame, text="Entrez une chaîne :").grid(row=0, column=0, columnspan=3, pady=5)
