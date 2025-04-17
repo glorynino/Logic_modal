@@ -1,0 +1,152 @@
+import sys
+import tkinter as tk
+from tkinter import ttk
+sys.stdout.reconfigure(encoding='utf-8')
+
+# ------------------- PARTIE SYNTAXIQUE -------------------
+
+states = {'q0', 'q1', 'q2', 'q3', 'q4', 'sink'}
+alphabet = {'A', '□', '◇', '∧', '∨', '¬', '→', 'B', '(', ')'}
+initial_state = 'q0'
+accepting_states = {'q0', 'q2'}
+
+transition = {
+    ('q0', 'A'): 'q2', ('q0', 'B'): 'q2', ('q0', '□'): 'q1', ('q0', '◇'): 'q1', ('q0', '('): 'q3', ('q0', '¬'): 'q1',
+    ('q1', 'A'): 'q2', ('q1', 'B'): 'q2', ('q1', '¬'): 'q1',
+    ('q2', '∧'): 'q0', ('q2', '∨'): 'q0', ('q2', '→'): 'q0', ('q2', ')'): 'q0',
+    ('q3', 'A'): 'q4', ('q3', 'B'): 'q4', ('q3', '□'): 'q1', ('q3', '◇'): 'q1', ('q3', '('): 'q3', ('q3', '¬'): 'q1',
+    ('q4', '∧'): 'q3', ('q4', '∨'): 'q3', ('q4', '→'): 'q3', ('q4', ')'): 'q0',
+}
+
+for s in states:
+    for a in alphabet:
+        transition.setdefault((s, a), 'sink')
+
+def run_dfa(input_string):
+    if input_string.count('(') != input_string.count(')'):
+        return False, "❌ chaîne rejetée : parenthèses non équilibrées"
+
+    current_state = initial_state
+    for symbol in input_string:
+        if symbol not in alphabet:
+            return False, f"'{symbol}' n'est pas dans l'alphabet"
+        current_state = transition.get((current_state, symbol), 'sink')
+        print(f"Après lecture de '{symbol}', état actuel : {current_state}")
+    return (True, "✅ Chaîne acceptée") if current_state in accepting_states else (False, "❌ Chaîne rejetée")
+
+# ------------------- PARTIE SEMANTIQUE -------------------
+
+def generate_relation(modele, worlds):
+    if modele == "K":
+        return {w: set(worlds) for w in worlds}
+    elif modele == "T":
+        return {w: {w} for w in worlds}
+    elif modele == "S4":
+        return {w: {x for x in worlds if worlds.index(x) >= worlds.index(w)} for w in worlds}
+    elif modele == "S5":
+        return {w: set(worlds) for w in worlds}
+    else:
+        return {w: set() for w in worlds}
+
+valuation = {
+    'A': {'w1'},
+    'B': {'w2'}
+}
+
+worlds = ['w0', 'w1', 'w2']
+
+def is_true(formula, world, model):
+    R = model['R']
+    V = model['V']
+
+    # simplifié, à améliorer avec un vrai parseur récursif
+    if formula in V:
+        return world in V[formula]
+    elif formula.startswith('¬'):
+        return not is_true(formula[1:], world, model)
+    elif formula.startswith('□'):
+        return all(is_true(formula[1:], w2, model) for w2 in R.get(world, []))
+    elif formula.startswith('◇'):
+        return any(is_true(formula[1:], w2, model) for w2 in R.get(world, []))
+    elif '∧' in formula:
+        left, right = formula.split('∧', 1)
+        return is_true(left, world, model) and is_true(right, world, model)
+    elif '∨' in formula:
+        left, right = formula.split('∨', 1)
+        return is_true(left, world, model) or is_true(right, world, model)
+    elif '→' in formula:
+        left, right = formula.split('→', 1)
+        return not is_true(left, world, model) or is_true(right, world, model)
+    return False
+
+# ------------------- INTERFACE GRAPHIQUE -------------------
+
+root = tk.Tk()
+root.title("Testeur Logique Modale")
+root.geometry("700x700")
+root.configure(bg="#2C3E50")
+
+# Conteneur principal
+main_frame = tk.Frame(root, bg="#2C3E50")
+main_frame.pack(expand=True)
+
+style = ttk.Style()
+style.configure("TButton", font=("Arial", 12), padding=5)
+style.configure("TLabel", background="#2C3E50", foreground="white", font=("Arial", 12))
+
+# Entrée utilisateur
+ttk.Label(main_frame, text="Entrez une formule modale :").pack(pady=5)
+entry = ttk.Entry(main_frame, width=40, font=("Arial", 12))
+entry.pack(pady=5)
+
+# Choix du modèle
+ttk.Label(main_frame, text="Modèle choisi :").pack()
+modele_combo = ttk.Combobox(main_frame, values=['K', 'T', 'S4', 'S5'])
+modele_combo.set('K')
+modele_combo.pack(pady=5)
+
+# Choix du monde
+ttk.Label(main_frame, text="Monde actuel :").pack()
+world_combo = ttk.Combobox(main_frame, values=worlds)
+world_combo.set('w0')
+world_combo.pack(pady=5)
+
+# Symboles
+symbols = ['A', 'B', '□', '◇', '→', '∧', '∨', '¬', '(', ')']
+symbol_frame = tk.Frame(main_frame, bg="#2C3E50")
+symbol_frame.pack(pady=10)
+for i, sym in enumerate(symbols):
+    ttk.Button(symbol_frame, text=sym, width=4, command=lambda s=sym: entry.insert(tk.END, s)).grid(row=i // 5, column=i % 5, padx=5, pady=5)
+
+# Bouton test syntaxe
+def test_string():
+    input_string = entry.get()
+    accepted, message = run_dfa(input_string)
+    result_label.config(text=message, foreground="green" if accepted else "red")
+
+ttk.Button(main_frame, text="Tester la syntaxe", command=test_string).pack(pady=10)
+
+# Bouton test vérité
+def test_veracite():
+    formule = entry.get()
+    modele = modele_combo.get()
+    monde = world_combo.get()
+    R = generate_relation(modele, worlds)
+    model = {'R': R, 'V': valuation}
+    try:
+        verite = is_true(formule, monde, model)
+        msg = "✅ Formule vraie dans ce monde" if verite else "❌ Formule fausse dans ce monde"
+        result_label.config(text=msg, foreground="green" if verite else "red")
+    except Exception as e:
+        result_label.config(text=f"Erreur : {str(e)}", foreground="orange")
+
+ttk.Button(main_frame, text="Tester la véracité", command=test_veracite).pack(pady=5)
+
+# Résultat
+result_label = ttk.Label(main_frame, text="", font=("Arial", 14, "bold"))
+result_label.pack(pady=20)
+
+# Quitter
+ttk.Button(main_frame, text="Quitter", command=root.destroy).pack(pady=5)
+
+root.mainloop()
