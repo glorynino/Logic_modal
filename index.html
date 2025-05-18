@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modal Logic Automaton</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Light theme */
+      --light-bg: #ffffff;
+      --light-secondary-bg: #f5f5f5;
+      --light-fg: #1a1a1a;
+      --light-secondary-fg: #6e6e6e;
+      --light-border: #e0e0e0;
+      --light-button-bg: #f0f0f0;
+      --light-button-hover: #e0e0e0;
+      --light-input-bg: #ffffff;
+      --light-success: #10b981;
+      --light-error: #ef4444;
+      --light-accent: #3b82f6;
+      --light-separator: #e0e0e0;
+
+      /* Dark theme (v0 style) */
+      --dark-bg: #0e1117;
+      --dark-secondary-bg: #1a1e24;
+      --dark-fg: #ffffff;
+      --dark-secondary-fg: #a0a0a0;
+      --dark-border: #2d3748;
+      --dark-button-bg: #2d3748;
+      --dark-button-hover: #3d4a5c;
+      --dark-input-bg: #1a1e24;
+      --dark-success: #10b981;
+      --dark-error: #ef4444;
+      --dark-accent: #3b82f6;
+      --dark-separator: #2d3748;
+
+      /* Default to dark theme */
+      --bg: var(--dark-bg);
+      --secondary-bg: var(--dark-secondary-bg);
+      --fg: var(--dark-fg);
+      --secondary-fg: var(--dark-secondary-fg);
+      --border: var(--dark-border);
+      --button-bg: var(--dark-button-bg);
+      --button-hover: var(--dark-button-hover);
+      --input-bg: var(--dark-input-bg);
+      --success: var(--dark-success);
+      --error: var(--dark-error);
+      --accent: var(--dark-accent);
+      --separator: var(--dark-separator);
+
+      /* Spacing */
+      --space-xs: 0.25rem;
+      --space-sm: 0.5rem;
+      --space-md: 1rem;
+      --space-lg: 1.5rem;
+      --space-xl: 2rem;
+
+      /* Border radius */
+      --radius-sm: 0.25rem;
+      --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;
+    }
+
+    /* Light theme class */
+    .light-theme {
+      --bg: var(--light-bg);
+      --secondary-bg: var(--light-secondary-bg);
+      --fg: var(--light-fg);
+      --secondary-fg: var(--light-secondary-fg);
+      --border: var(--light-border);
+      --button-bg: var(--light-button-bg);
+      --button-hover: var(--light-button-hover);
+      --input-bg: var(--light-input-bg);
+      --success: var(--light-success);
+      --error: var(--light-error);
+      --accent: var(--light-accent);
+      --separator: var(--light-separator);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Poppins", sans-serif;
+      background-color: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--space-md);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--space-xl);
+      padding: var(--space-md) 0;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .theme-toggle {
+      background: transparent;
+      border: none;
+      color: var(--fg);
+      cursor: pointer;
+      padding: var(--space-sm);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .theme-toggle:hover {
+      background-color: var(--button-hover);
+    }
+
+    .dark-theme .sun-icon {
+      display: block;
+    }
+
+    .dark-theme .moon-icon {
+      display: none;
+    }
+
+    .light-theme .sun-icon {
+      display: none;
+    }
+
+    .light-theme .moon-icon {
+      display: block;
+    }
+
+    main {
+      display: flex;
+      gap: var(--space-xl);
+      flex-wrap: wrap;
+    }
+
+    .left-panel,
+    .right-panel {
+      flex: 1;
+      min-width: 300px;
+    }
+
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+    }
+
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+    }
+
+    .input-section,
+    .history-section,
+    .symbols-section,
+    .action-section,
+    .info-section {
+      margin-bottom: var(--space-lg);
+    }
+
+    .section-header {
+      margin-bottom: var(--space-md);
+      padding-bottom: var(--space-sm);
+      border-bottom: 1px solid var(--border);
+    }
+
+    label {
+      display: block;
+      margin-bottom: var(--space-sm);
+      font-weight: 500;
+    }
+
+    .input-wrapper {
+      position: relative;
+      margin-bottom: var(--space-md);
+    }
+
+    input {
+      width: 100%;
+      padding: var(--space-md);
+      font-family: "Roboto Mono", monospace;
+      font-size: 1rem;
+      background-color: var(--input-bg);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+    }
+
+    .result {
+      min-height: 2.5rem;
+      font-weight: 500;
+      margin-top: var(--space-sm);
+    }
+
+    .success {
+      color: var(--success);
+    }
+
+    .error {
+      color: var(--error);
+    }
+
+    .history-section,
+    .symbols-section,
+    .info-section {
+      padding-left: 12px;
+      padding-top: 4px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .history-container {
+      height: 300px;
+      overflow-y: auto;
+    }
+
+    .history-content {
+      padding: var(--space-md);
+    }
+
+    .history-entry {
+      margin-bottom: var(--space-md);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .history-entry:last-child {
+      border-bottom: none;
+    }
+
+    .history-expression {
+      font-family: "Roboto Mono", monospace;
+      margin-bottom: var(--space-xs);
+    }
+
+    .history-result {
+      font-weight: 500;
+    }
+
+    .empty-message {
+      color: var(--secondary-fg);
+      font-style: italic;
+    }
+
+    .symbol-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-sm);
+      padding: var(--space-md);
+    }
+
+    button {
+      font-family: "Poppins", sans-serif;
+      padding: var(--space-md);
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+      font-weight: 500;
+    }
+
+    .symbol-btn,
+    .action-btn {
+      background-color: var(--button-bg);
+      color: var(--fg);
+    }
+
+    .symbol-btn {
+      font-family: "Roboto Mono", monospace;
+      font-size: 1.2rem;
+    }
+
+    .symbol-btn:hover,
+    .action-btn:hover {
+      background-color: var(--button-hover);
+    }
+
+    .symbol-btn:active,
+    .action-btn:active {
+      transform: scale(0.95);
+    }
+
+    .primary-btn {
+      background-color: var(--accent);
+      color: white;
+      padding: var(--space-md) var(--space-lg);
+      font-weight: 600;
+      margin-bottom: var(--space-md);
+    }
+
+    .primary-btn:hover {
+      background-color: var(--accent);
+      filter: brightness(1.1);
+    }
+
+    .secondary-btn {
+      background-color: var(--button-bg);
+      color: var(--fg);
+      padding: var(--space-md) var(--space-lg);
+    }
+
+    .secondary-btn:hover {
+      background-color: var(--button-hover);
+    }
+
+    .action-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+
+    .info-section p {
+      padding: var(--space-md);
+      color: var(--secondary-fg);
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--secondary-bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--button-bg);
+      border-radius: var(--radius-md);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--button-hover);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      main {
+        flex-direction: column;
+      }
+
+      .left-panel,
+      .right-panel {
+        width: 100%;
+      }
+
+      .history-container {
+        height: 200px;
+      }
+
+      .symbol-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .symbol-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .container {
+        padding: var(--space-sm);
+      }
+    }
+  </style>
+</head>
+<body class="dark-theme">
+<div class="container">
+  <header>
+    <h1>Modal Logic Automaton</h1>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+      <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+  </header>
+
+  <main>
+    <div class="left-panel">
+      <div class="input-section">
+        <label for="expression-input">Expression:</label>
+        <div class="input-wrapper">
+          <input type="text" id="expression-input" placeholder="Enter modal logic expression">
+        </div>
+        <div id="result" class="result"></div>
+      </div>
+
+      <div class="history-section">
+        <div class="section-header">
+          <h2>History</h2>
+        </div>
+        <div class="history-container">
+          <div id="history-content" class="history-content">
+            <p class="empty-message">No history yet. Test some expressions.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div class="symbols-section">
+        <div class="section-header">
+          <h2>Symbols</h2>
+        </div>
+        <div class="symbol-grid">
+          <button class="symbol-btn" data-symbol="A">A</button>
+          <button class="symbol-btn" data-symbol="B">B</button>
+          <button class="symbol-btn" data-symbol="□">□</button>
+          <button class="symbol-btn" data-symbol="◇">◇</button>
+          <button class="symbol-btn" data-symbol="∧">∧</button>
+          <button class="symbol-btn" data-symbol="∨">∨</button>
+          <button class="symbol-btn" data-symbol="¬">¬</button>
+          <button class="symbol-btn" data-symbol="→">→</button>
+          <button class="symbol-btn" data-symbol="(">(</button>
+          <button class="symbol-btn" data-symbol=")">)</button>
+          <button class="action-btn delete-btn">DEL</button>
+          <button class="action-btn clear-btn">CLR</button>
+        </div>
+      </div>
+
+      <div class="action-section">
+        <button id="test-btn" class="primary-btn">Test Expression</button>
+        <button id="clear-history-btn" class="secondary-btn">Clear History</button>
+      </div>
+
+      <div class="info-section">
+        <div class="section-header">
+          <h2>Information</h2>
+        </div>
+        <p>This calculator tests modal logic expressions against a deterministic finite automaton.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  /**
+   * Modal Logic Automaton
+   * Represents a deterministic finite automaton for modal logic validation
+   */
+  class ModalLogicAutomaton {
+    constructor() {
+      // Define states
+      this.states = new Set(["q0", "q1", "q2", "q3", "q4", "sink"])
+      this.alphabet = new Set(["A", "□", "◇", "∧", "∨", "¬", "→", "B", "(", ")"])
+      this.initialState = "q0"
+      this.acceptingStates = new Set(["q0", "q2"])
+
+      // Define transition function
+      this.transition = {
+        // q0: beginning or after logical operator
+        "q0,A": "q2",
+        "q0,B": "q2",
+        "q0,□": "q1",
+        "q0,◇": "q1",
+        "q0,(": "q3",
+
+        // q1: after modal operator, expecting proposition
+        "q1,A": "q2",
+        "q1,B": "q2",
+        "q1,□": "sink",
+        "q1,◇": "sink",
+        "q1,(": "sink",
+
+        // q2: after proposition, expecting logical operator or closing
+        "q2,∧": "q0",
+        "q2,∨": "q0",
+        "q2,→": "q0",
+        "q2,)": "q0",
+        "q2,A": "sink",
+        "q2,B": "sink",
+        "q2,□": "sink",
+        "q2,◇": "sink",
+        "q2,(": "sink",
+
+        // q3: after opening parenthesis '('
+        "q3,A": "q4",
+        "q3,B": "q4",
+        "q3,□": "q1",
+        "q3,◇": "q1",
+        "q3,(": "q3", // nested parentheses allowed
+
+        // q4: inside parenthesis after proposition
+        "q4,∧": "q3",
+        "q4,∨": "q3",
+        "q4,→": "q3",
+        "q4,)": "q0",
+        "q4,A": "sink",
+        "q4,B": "sink",
+        "q4,□": "sink",
+        "q4,◇": "sink",
+        "q4,(": "sink",
+
+        // sink: error state
+        "sink,A": "sink",
+        "sink,B": "sink",
+        "sink,□": "sink",
+        "sink,◇": "sink",
+        "sink,(": "sink",
+        "sink,)": "sink",
+        "sink,∧": "sink",
+        "sink,∨": "sink",
+        "sink,→": "sink",
+      }
+    }
+
+    /**
+     * Run the automaton on the input string
+     * @param {string} inputString - The string to validate
+     * @returns {Object} Result object with acceptance status, message, and state history
+     */
+    run(inputString) {
+      let currentState = this.initialState
+      const stateHistory = [{ state: currentState, symbol: "" }]
+
+      for (const symbol of inputString) {
+        if (!this.alphabet.has(symbol)) {
+          return {
+            accepted: false,
+            message: `'${symbol}' is not in the alphabet`,
+            stateHistory,
+          }
+        }
+
+        const key = `${currentState},${symbol}`
+        currentState = this.transition[key] || "sink"
+        stateHistory.push({ state: currentState, symbol })
+      }
+
+      const isAccepted = this.acceptingStates.has(currentState)
+      const message = isAccepted ? "✅ String accepted" : "❌ String rejected"
+
+      return {
+        accepted: isAccepted,
+        message,
+        stateHistory,
+      }
+    }
+  }
+
+  // DOM Elements
+  const themeToggle = document.getElementById("theme-toggle")
+  const expressionInput = document.getElementById("expression-input")
+  const resultElement = document.getElementById("result")
+  const historyContent = document.getElementById("history-content")
+  const testButton = document.getElementById("test-btn")
+  const clearHistoryButton = document.getElementById("clear-history-btn")
+  const symbolButtons = document.querySelectorAll(".symbol-btn")
+  const deleteButton = document.querySelector(".delete-btn")
+  const clearButton = document.querySelector(".clear-btn")
+
+  // Initialize automaton
+  const automaton = new ModalLogicAutomaton()
+
+  // History management
+  const historyManager = {
+    history: [],
+
+    addEntry(expression, result) {
+      this.history.unshift({
+        expression,
+        accepted: result.accepted,
+        message: result.message,
+        stateHistory: result.stateHistory,
+      })
+      this.updateDisplay()
+    },
+
+    clearHistory() {
+      this.history = []
+      this.updateDisplay()
+    },
+
+    updateDisplay() {
+      historyContent.innerHTML = ""
+
+      if (this.history.length === 0) {
+        const emptyMessage = document.createElement("p")
+        emptyMessage.className = "empty-message"
+        emptyMessage.textContent = "No history yet. Test some expressions."
+        historyContent.appendChild(emptyMessage)
+        return
+      }
+
+      this.history.forEach((entry, index) => {
+        const historyEntry = document.createElement("div")
+        historyEntry.className = "history-entry"
+
+        const expressionElement = document.createElement("div")
+        expressionElement.className = "history-expression"
+        expressionElement.innerHTML = `<strong>${index + 1}. Expression:</strong> ${entry.expression}`
+
+        const resultElement = document.createElement("div")
+        resultElement.className = `history-result ${entry.accepted ? "success" : "error"}`
+        resultElement.textContent = entry.message
+
+        historyEntry.appendChild(expressionElement)
+        historyEntry.appendChild(resultElement)
+        historyContent.appendChild(historyEntry)
+      })
+    },
+  }
+
+  // Theme management
+  function toggleTheme() {
+    document.body.classList.toggle("light-theme")
+    document.body.classList.toggle("dark-theme")
+
+    // Save theme preference
+    const isDarkTheme = document.body.classList.contains("dark-theme")
+    localStorage.setItem("darkTheme", isDarkTheme)
+  }
+
+  // Load saved theme
+  function loadTheme() {
+    const isDarkTheme = localStorage.getItem("darkTheme") !== "false" // Default to dark
+
+    if (isDarkTheme) {
+      document.body.classList.add("dark-theme")
+      document.body.classList.remove("light-theme")
+    } else {
+      document.body.classList.add("light-theme")
+      document.body.classList.remove("dark-theme")
+    }
+  }
+
+  // Test the current expression
+  function testExpression() {
+    const expression = expressionInput.value.trim()
+
+    if (!expression) {
+      resultElement.textContent = "Please enter an expression to test"
+      resultElement.className = "result error"
+      return
+    }
+
+    const result = automaton.run(expression)
+    resultElement.textContent = result.message
+    resultElement.className = `result ${result.accepted ? "success" : "error"}`
+
+    historyManager.addEntry(expression, result)
+  }
+
+  // Insert symbol into input
+  function insertSymbol(symbol) {
+    const cursorPos = expressionInput.selectionStart
+    const textBefore = expressionInput.value.substring(0, cursorPos)
+    const textAfter = expressionInput.value.substring(cursorPos)
+
+    expressionInput.value = textBefore + symbol + textAfter
+
+    // Set cursor position after inserted symbol
+    expressionInput.selectionStart = cursorPos + 1
+    expressionInput.selectionEnd = cursorPos + 1
+    expressionInput.focus()
+  }
+
+  // Delete last character
+  function deleteLastCharacter() {
+    const cursorPos = expressionInput.selectionStart
+
+    if (cursorPos > 0) {
+      const textBefore = expressionInput.value.substring(0, cursorPos - 1)
+      const textAfter = expressionInput.value.substring(cursorPos)
+
+      expressionInput.value = textBefore + textAfter
+
+      // Set cursor position
+      expressionInput.selectionStart = cursorPos - 1
+      expressionInput.selectionEnd = cursorPos - 1
+    }
+
+    expressionInput.focus()
+  }
+
+  // Clear input
+  function clearInput() {
+    expressionInput.value = ""
+    resultElement.textContent = ""
+    resultElement.className = "result"
+    expressionInput.focus()
+  }
+
+  // Event listeners
+  themeToggle.addEventListener("click", toggleTheme)
+  testButton.addEventListener("click", testExpression)
+  clearHistoryButton.addEventListener("click", () => historyManager.clearHistory())
+
+  symbolButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      insertSymbol(button.dataset.symbol)
+    })
+  })
+
+  deleteButton.addEventListener("click", deleteLastCharacter)
+  clearButton.addEventListener("click", clearInput)
+
+  // Keyboard shortcuts
+  expressionInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      testExpression()
+    } else if (e.key === "Escape") {
+      clearInput()
+    }
+  })
+
+  // Initialize
+  loadTheme()
+  historyManager.updateDisplay()
+  expressionInput.focus()
+</script>
+</body>
+</html>
