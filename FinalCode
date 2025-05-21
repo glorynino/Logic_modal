@@ -53,40 +53,34 @@ import re
 
 # Tokenisation de la formule
 def tokenize(formula):
-    pattern = r'(□|◇|¬|∧|∨|→|\(|\)|[A-Z])'
+    pattern = r'(□|◇|¬|∧|∨|→|⟷|\(|\)|[A-Z])'
     return [token for token in re.findall(pattern, formula) if token.strip() != '']
 
 # Parseur récursif de formules modales
 def parse(tokens):
     def parse_primary(index):
         token = tokens[index]
-
         if token == '(':
             expr, index = parse_expression(index + 1)
             if tokens[index] != ')':
                 raise ValueError("Parenthèse fermante attendue")
             return expr, index + 1
-
         elif token in ('¬', '□', '◇'):
             operand, index = parse_primary(index + 1)
             return (token, operand), index
-
         elif token in ('A', 'B'):
             return token, index + 1
-
         raise ValueError(f"Token inattendu : {token}")
 
     def parse_expression(index):
         left, index = parse_primary(index)
-
         while index < len(tokens):
             token = tokens[index]
-            if token in ('∧', '∨', '→'):
+            if token in ('∧', '∨', '→', '⟷'):
                 right, index = parse_primary(index + 1)
                 left = (token, left, right)
             else:
                 break
-
         return left, index
 
     ast, final_index = parse_expression(0)
@@ -95,16 +89,14 @@ def parse(tokens):
     return ast
 
 
+
 # Évaluation récursive d'un AST
 def evaluate(ast, world, model):
     R = model['R']
     V = model['V']
-
     if isinstance(ast, str):
         return world in V.get(ast, set())
-
     op = ast[0]
-
     if op == '¬':
         return not evaluate(ast[1], world, model)
     elif op == '□':
@@ -117,8 +109,10 @@ def evaluate(ast, world, model):
         return evaluate(ast[1], world, model) or evaluate(ast[2], world, model)
     elif op == '→':
         return not evaluate(ast[1], world, model) or evaluate(ast[2], world, model)
-
+    elif op == '⟷':
+        return evaluate(ast[1], world, model) == evaluate(ast[2], world, model)
     return False
+
 
 # Fonction finale à appeler
 def is_true(formula, world, model):
@@ -455,32 +449,10 @@ symbols_grid.pack(fill="x")
 
 # Organisation des symboles en grille
 symbols = [
-    ('A', 0, 0), ('B', 0, 1), ('□', 0, 2), ('◇', 0, 3),
-    ('∧', 1, 0), ('∨', 1, 1), ('¬', 1, 2), ('→', 1, 3),
-    ('(', 2, 0), (')', 2, 1), ('DEL', 2, 2), ('CLR', 2, 3)
+    ('A', 0, 0), ('B', 0, 1), ('□', 0, 2), ('◇', 0, 3), ('⟷', 0, 4),
+    ('∧', 1, 0), ('∨', 1, 1), ('¬', 1, 2), ('→', 1, 3), ('(', 1, 4),
+    (')', 2, 0), ('DEL', 2, 1), ('CLR', 2, 2)
 ]
-
-for sym, row, col in symbols:
-    button_style = "Symbol.TButton"
-    button_width = 6
-    if sym in ['DEL', 'CLR']:
-        command = lambda s=sym: delete_char() if s == 'DEL' else clear_entry()
-    else:
-        command = lambda s=sym: entry.insert(tk.END, s)
-    
-    # Créer un frame coloré pour le bouton
-    btn_frame = tk.Frame(symbols_grid, bg="#303950", padx=2, pady=2)
-    btn_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
-    
-    # Créer le bouton dans le frame
-    btn = ttk.Button(btn_frame, text=sym, width=button_width, style=button_style, command=command)
-    btn.pack(fill="both", expand=True)
-
-# Configurer les poids des lignes et colonnes pour la grille des symboles
-for i in range(3):
-    symbols_grid.grid_rowconfigure(i, weight=1)
-for i in range(4):
-    symbols_grid.grid_columnconfigure(i, weight=1)
 
 # Fonctions pour les boutons DEL et CLR
 def delete_char():
@@ -490,6 +462,31 @@ def delete_char():
 
 def clear_entry():
     entry.delete(0, tk.END)
+
+
+for sym, row, col in symbols:
+    button_style = "Symbol.TButton"
+    button_width = 6
+    if sym in ['DEL', 'CLR']:
+        command = lambda s=sym: delete_char() if s == 'DEL' else clear_entry()
+    else:
+        command = lambda s=sym: entry.insert(tk.END, s)
+
+    # Créer un frame coloré pour le bouton
+    btn_frame = tk.Frame(symbols_grid, bg="#303950", padx=2, pady=2)
+    btn_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+    
+    # Créer le bouton dans le frame
+    btn = ttk.Button(btn_frame, text=sym, width=button_width, style=button_style, command=command)
+    btn.pack(fill="both", expand=True)
+
+
+# Configurer les poids des lignes et colonnes pour la grille des symboles
+for i in range(3):
+    symbols_grid.grid_rowconfigure(i, weight=1)
+for i in range(5):
+    symbols_grid.grid_columnconfigure(i, weight=1)
+
 
 # Zone des actions
 actions_frame = tk.Frame(right_column, bg="#111724", padx=10, pady=15, borderwidth=1, relief="solid")
@@ -519,14 +516,6 @@ def test_string():
     history_text.insert("1.0", f"{input_string}: {message}\n")
     history_text.config(state="disabled")
 
-    
-    # Mettre à jour l'historique
-    history_text.config(state="normal")
-    if history_text.get("1.0", "1.24") == "No history yet. Test some e":
-        history_text.delete("1.0", tk.END)
-    
-    history_text.insert("1.0", f"{input_string}: {message}\n")
-    history_text.config(state="disabled")
 
 # Créer un frame bleu pour le bouton
 test_button_frame = tk.Frame(actions_frame, bg="#4a87ff", padx=2, pady=2)
