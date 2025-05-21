@@ -1,81 +1,34 @@
 import sys
 import tkinter as tk
 from tkinter import ttk
+from PIL import Image, ImageTk, ImageDraw # type: ignore
+import math
+import os
+import base64
+from io import BytesIO
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Définition de l'automate
-states = {'q0', 'q1', 'q2', 'sink'}
-alphabet = {'A', '□', '◇', '∧', '∨', '¬', '→','B','(',')'}
+# ------------------- PARTIE SYNTAXIQUE -------------------
+states = {'q0', 'q1', 'q2', 'q3', 'q4', 'sink'}
+alphabet = {'A', '□', '◇', '∧', '∨', '¬', '→', 'B', '(', ')'}
 initial_state = 'q0'
 accepting_states = {'q0', 'q2'}
 
-
 transition = {
-    # q0 : début ou après opérateur logique
-    ('q0', 'A'): 'q2',
-    ('q0', 'B'): 'q2',
-    ('q0', '□'): 'q1',
-    ('q0', '◇'): 'q1',
-    ('q0', '('): 'q3',
-    ('q0', '¬'): 'q1',
-
-    # q1 : après un opérateur modal, on attend une proposition
-    ('q1', 'A'): 'q2',
-    ('q1', 'B'): 'q2',
-    ('q1', '□'): 'sink',
-    ('q1', '◇'): 'sink',
-    ('q1', '('): 'sink',
-    ('q1', '¬'): 'q1',
-
-    # q2 : après une proposition, on attend un opérateur logique ou fermeture
-    ('q2', '∧'): 'q0',
-    ('q2', '∨'): 'q0',
-    ('q2', '→'): 'q0',  # ajout de l'implication
-    ('q2', ')'): 'q0',
-    ('q2', 'A'): 'sink',
-    ('q2', 'B'): 'sink',
-    ('q2', '□'): 'sink',
-    ('q2', '◇'): 'sink',
-    ('q2', '('): 'sink',
-    
-
-    # q3 : après une parenthèse ouvrante '('
-    ('q3', 'A'): 'q4',
-    ('q3', 'B'): 'q4',
-    ('q3', '□'): 'q1',
-    ('q3', '◇'): 'q1',
-    ('q3', '('): 'q3',
-    ('q3', '¬'): 'q1',
-
-    # q4 : à l’intérieur d’une parenthèse après une proposition
-    ('q4', '∧'): 'q3',
-    ('q4', '∨'): 'q3',
-    ('q4', '→'): 'q3',  # ajout de l'implication
-    ('q4', ')'): 'q0',
-    ('q4', 'A'): 'sink',
-    ('q4', 'B'): 'sink',
-    ('q4', '□'): 'sink',
-    ('q4', '◇'): 'sink',
-    ('q4', '('): 'sink',
-
-    # sink : état poubelle
-    ('sink', 'A'): 'sink',
-    ('sink', 'B'): 'sink',
-    ('sink', '□'): 'sink',
-    ('sink', '◇'): 'sink',
-    ('sink', '('): 'sink',
-    ('sink', ')'): 'sink',
-    ('sink', '∧'): 'sink',
-    ('sink', '∨'): 'sink',
-    ('sink', '→'): 'sink',
+    ('q0', 'A'): 'q2', ('q0', 'B'): 'q2', ('q0', '□'): 'q1', ('q0', '◇'): 'q1', ('q0', '('): 'q3', ('q0', '¬'): 'q1',
+    ('q1', 'A'): 'q2', ('q1', 'B'): 'q2', ('q1', '¬'): 'q1',
+    ('q2', '∧'): 'q0', ('q2', '∨'): 'q0', ('q2', '→'): 'q0', ('q2', ')'): 'q0',
+    ('q3', 'A'): 'q4', ('q3', 'B'): 'q4', ('q3', '□'): 'q1', ('q3', '◇'): 'q1', ('q3', '('): 'q3', ('q3', '¬'): 'q1',
+    ('q4', '∧'): 'q3', ('q4', '∨'): 'q3', ('q4', '→'): 'q3', ('q4', ')'): 'q0',
 }
 
-
+for s in states:
+    for a in alphabet:
+        transition.setdefault((s, a), 'sink')
 
 def run_dfa(input_string):
-    # Vérification des parenthèses équilibrées
     if input_string.count('(') != input_string.count(')'):
-        return False, "❌ chaine rejete verifier vos parenthese"
+        return False, "❌ chaîne rejetée : parenthèses non équilibrées"
 
     current_state = initial_state
     for symbol in input_string:
@@ -85,65 +38,530 @@ def run_dfa(input_string):
         print(f"Après lecture de '{symbol}', état actuel : {current_state}")
     return (True, "✅ Chaîne acceptée") if current_state in accepting_states else (False, "❌ Chaîne rejetée")
 
-# Fonction pour tester la chaîne entrée
+# ------------------- PARTIE SEMANTIQUE -------------------
+def generate_relation(modele, worlds):
+    if modele == "K":
+        return {w: set(worlds) for w in worlds}
+    elif modele == "T":
+        return {w: {w} | set(worlds) - {w} for w in worlds}  # Réflexif
+    elif modele == "S4":
+        return {w: {x for x in worlds if worlds.index(x) >= worlds.index(w)} for w in worlds}
+    elif modele == "S5":
+        return {w: set(worlds) for w in worlds}
+    else:
+        return {w: set() for w in worlds}
+
+valuation = {
+    'A': {'w1'},
+    'B': {'w2'},
+}
+
+worlds = ['w0', 'w1', 'w2']
+
+def is_true(formula, world, model):
+    R = model['R']
+    V = model['V']
+
+    # simplifié, à améliorer avec un vrai parseur récursif
+    if formula in V:
+        return world in V[formula]
+    elif formula.startswith('¬'):
+        return not is_true(formula[1:], world, model)
+    elif formula.startswith('□'):
+        return all(is_true(formula[1:], w2, model) for w2 in R.get(world, []))
+    elif formula.startswith('◇'):
+        return any(is_true(formula[1:], w2, model) for w2 in R.get(world, []))
+    elif '∧' in formula:
+        left, right = formula.split('∧', 1)
+        return is_true(left, world, model) and is_true(right, world, model)
+    elif '∨' in formula:
+        left, right = formula.split('∨', 1)
+        return is_true(left, world, model) or is_true(right, world, model)
+    elif '→' in formula:
+        left, right = formula.split('→', 1)
+        return not is_true(left, world, model) or is_true(right, world, model)
+    return False
+
+# ------------------- GESTION DES IMAGES PRÉDÉFINIES -------------------
+
+model_images = {
+    'K': "k.png",
+    'T': "T.png",
+    'S4': "s4.png",
+    'S5': "s5.png"
+}
+
+# Fonction pour obtenir l'image d'un modèle
+def get_model_image(model_type):
+    # Si un chemin d'image est défini et que le fichier existe
+    if model_type in model_images and model_images[model_type] and os.path.exists(model_images[model_type]):
+        try:
+            image = Image.open(model_images[model_type])
+            # Redimensionner l'image si nécessaire
+            max_size = (800, 600)
+            if image.width > max_size[0] or image.height > max_size[1]:
+                image.thumbnail(max_size, Image.LANCZOS)
+            return image
+        except Exception as e:
+            print(f"Erreur lors du chargement de l'image pour {model_type}: {e}")
+    
+    # Si aucune image personnalisée n'est disponible, générer l'image
+    return create_model_image(model_type)
+
+# Fonction de génération d'image pour les modèles
+def create_model_image(model_type):
+    # Créer une image pour représenter le modèle
+    width, height = 300, 300
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+    
+    # Positions des mondes
+    world_positions = {
+        'w0': (width//2, height//4),
+        'w1': (width//4, 3*height//4),
+        'w2': (3*width//4, 3*height//4)
+    }
+    
+    # Dessiner les mondes
+    radius = 30
+    for world, pos in world_positions.items():
+        draw.ellipse((pos[0]-radius, pos[1]-radius, pos[0]+radius, pos[1]+radius), outline="black", width=2)
+        draw.text((pos[0]-10, pos[1]-10), world, fill="black")
+    
+    # Dessiner les relations selon le modèle
+    relations = generate_relation(model_type, worlds)
+    
+    # Couleurs pour les différents types de relations
+    colors = {
+        "K": "blue",
+        "T": "green",
+        "S4": "red",
+        "S5": "purple"
+    }
+    
+    arrow_color = colors.get(model_type, "black")
+    
+    # Dessiner les flèches des relations
+    for w1, related_worlds in relations.items():
+        start_pos = world_positions[w1]
+        for w2 in related_worlds:
+            if w1 != w2:  # Ne pas dessiner les boucles réflexives
+                end_pos = world_positions[w2]
+                
+                # Dessiner une flèche simple
+                draw.line([start_pos, end_pos], fill=arrow_color, width=2)
+                
+                # Dessiner la pointe de la flèche
+                angle = math.atan2(end_pos[1] - start_pos[1], end_pos[0] - start_pos[0])
+                arrow_length = 15
+                arrow_x1 = end_pos[0] - arrow_length * math.cos(angle - math.pi/6)
+                arrow_y1 = end_pos[1] - arrow_length * math.sin(angle - math.pi/6)
+                arrow_x2 = end_pos[0] - arrow_length * math.cos(angle + math.pi/6)
+                arrow_y2 = end_pos[1] - arrow_length * math.sin(angle + math.pi/6)
+                
+                draw.line([end_pos, (arrow_x1, arrow_y1)], fill=arrow_color, width=2)
+                draw.line([end_pos, (arrow_x2, arrow_y2)], fill=arrow_color, width=2)
+            
+            # Pour le modèle T, S4 et S5, montrer les relations réflexives
+            elif model_type in ["T", "S4", "S5"]:
+                # Dessiner un petit cercle pour indiquer la réflexivité
+                reflexive_radius = 10
+                draw.arc([start_pos[0]-reflexive_radius, start_pos[1]-2*radius,
+                          start_pos[0]+reflexive_radius, start_pos[1]-radius],
+                         0, 360, fill=arrow_color, width=2)
+    
+    # Ajouter un titre
+    model_titles = {
+        "K": "Modèle K (Pas de restrictions)",
+        "T": "Modèle T (Réflexif)",
+        "S4": "Modèle S4 (Réflexif et Transitif)",
+        "S5": "Modèle S5 (Relation d'équivalence)"
+    }
+    draw.text((10, 10), model_titles.get(model_type, f"Modèle {model_type}"), fill="black")
+    
+    # Ajouter une légende pour les valuations
+    draw.text((10, height-60), f"Valuation: A est vrai dans {list(valuation['A'])}", fill="black")
+    draw.text((10, height-40), f"Valuation: B est vrai dans {list(valuation['B'])}", fill="black")
+    
+    return image
+
+# ------------------- INTERFACE GRAPHIQUE -------------------
+root = tk.Tk()
+root.title("Modal Logic Automaton")
+root.geometry("1000x700")
+root.configure(bg="#0e1117")
+
+# --- Splash Screen ---
+splash_root = tk.Toplevel(root)
+splash_root.title("Loading...")
+splash_root.geometry("500x300")
+splash_root.overrideredirect(True)  # Enlève la bordure de fenêtre
+splash_root.configure(bg="#0e1117")
+
+# Position au centre
+screen_width = splash_root.winfo_screenwidth()
+screen_height = splash_root.winfo_screenheight()
+x = (screen_width - 500) // 2
+y = (screen_height - 300) // 2
+splash_root.geometry(f"500x300+{x}+{y}")
+
+# Contenu du splash screen
+splash_frame = tk.Frame(splash_root, bg="#0e1117")
+splash_frame.pack(fill="both", expand=True)
+
+# Titre du splash
+splash_title = tk.Label(splash_frame, text="Modal Logic Automaton", 
+                       font=("Arial", 24, "bold"), fg="#ffffff", bg="#0e1117")
+splash_title.pack(pady=(50, 20))
+
+# Message de chargement
+loading_label = tk.Label(splash_frame, text="Loading...", 
+                       font=("Arial", 16), fg="#4a87ff", bg="#0e1117")
+loading_label.pack(pady=10)
+
+# Simuler une barre de progression
+progress_frame = tk.Frame(splash_frame, bg="#1e2130", width=400, height=20)
+progress_frame.pack(pady=30)
+
+progress_bar = tk.Frame(progress_frame, bg="#4a87ff", width=0, height=20)
+progress_bar.place(x=0, y=0)
+
+# Fonction pour animer la barre de progression
+def update_progress_bar(current_width, total_width):
+    if current_width < total_width:
+        progress_bar.config(width=current_width)
+        splash_root.after(10, update_progress_bar, current_width+2, total_width)
+    else:
+        splash_root.after(500, close_splash)
+
+def close_splash():
+    splash_root.destroy()
+    root.deiconify()  # Afficher la fenêtre principale
+
+# Cacher la fenêtre principale pendant l'affichage du splash
+root.withdraw()
+
+# Lancer l'animation
+splash_root.after(100, update_progress_bar, 0, 400)
+
+# --- Styles ---
+style = ttk.Style()
+style.theme_use("default")
+style.configure("TButton", font=("Arial", 12), padding=5)
+style.configure("TLabel", background="#111724", foreground="white", font=("Arial", 12))
+style.configure("Title.TLabel", font=("Arial", 18, "bold"), foreground="white", background="#0e1117")
+style.configure("TEntry", font=("Arial", 14))
+style.configure("TCombobox", font=("Arial", 12))
+style.configure("Symbol.TButton", font=("Arial", 14, "bold"), padding=10, background="#303950")
+style.configure("Action.TButton", font=("Arial", 12), padding=8, background="#4a87ff")
+
+# --- Création d'un en-tête ---
+header_frame = tk.Frame(root, bg="#0e1117", pady=10)
+header_frame.pack(fill="x")
+
+title_label = ttk.Label(header_frame, text="Modal Logic Automaton", style="Title.TLabel")
+title_label.pack(side="left", padx=20)
+
+# --- Création du contenu principal en deux colonnes ---
+main_content = tk.Frame(root, bg="#0e1117")
+main_content.pack(fill="both", expand=True, padx=20, pady=10)
+
+# Colonne gauche
+left_column = tk.Frame(main_content, bg="#0e1117", width=400)
+left_column.pack(side="left", fill="both", expand=True, padx=(0, 10))
+left_column.pack_propagate(False)
+
+# Colonne droite
+right_column = tk.Frame(main_content, bg="#0e1117", width=500)
+right_column.pack(side="right", fill="both", expand=True, padx=(10, 0))
+right_column.pack_propagate(False)
+
+# --- COLONNE GAUCHE ---
+# Zone de saisie
+expression_frame = tk.Frame(left_column, bg="#111724", padx=10, pady=15, borderwidth=1, relief="solid")
+expression_frame.pack(fill="x", pady=10)
+
+expression_label = ttk.Label(expression_frame, text="Expression:", style="TLabel")
+expression_label.pack(anchor="w")
+
+entry = ttk.Entry(expression_frame, width=30, font=("Arial", 14))
+entry.pack(fill="x", pady=5)
+
+# Zone historique
+history_frame = tk.Frame(left_column, bg="#111724", padx=10, pady=70, height=100, borderwidth=1, relief="solid")
+history_frame.pack(fill="both", expand=True, pady=10)
+history_frame.pack_propagate(False)
+
+history_label = ttk.Label(history_frame, text="History", style="TLabel")
+history_label.pack(anchor="w")
+
+history_text = tk.Text(history_frame, bg="#1e2130", fg="white", font=("Arial", 12), height=5, wrap="word", borderwidth=0)
+history_text.pack(fill="both", expand=True, pady=5)
+history_text.insert("1.0", "No history yet. Test some expressions.")
+history_text.config(state="disabled")
+
+# Options de modèle et monde
+options_frame = tk.Frame(left_column, bg="#111724", padx=10, pady=15, borderwidth=1, relief="solid")
+options_frame.pack(fill="x", pady=10)
+
+# Container pour les options (deux colonnes)
+options_container = tk.Frame(options_frame, bg="#111724")
+options_container.pack(fill="x")
+
+# Colonne gauche des options
+options_left = tk.Frame(options_container, bg="#111724")
+options_left.pack(side="left", fill="x", expand=True)
+
+model_label = ttk.Label(options_left, text="Model:", style="TLabel")
+model_label.pack(anchor="w", pady=2)
+
+modele_combo = ttk.Combobox(options_left, values=['K', 'T', 'S4', 'S5'], font=("Arial", 12))
+modele_combo.set('K')
+modele_combo.pack(fill="x", pady=2)
+
+# Colonne droite des options
+options_right = tk.Frame(options_container, bg="#111724")
+options_right.pack(side="right", fill="x", expand=True, padx=(10, 0))
+
+world_label = ttk.Label(options_right, text="Current world:", style="TLabel")
+world_label.pack(anchor="w", pady=2)
+
+world_combo = ttk.Combobox(options_right, values=worlds, font=("Arial", 12))
+world_combo.set('w0')
+world_combo.pack(fill="x", pady=2)
+
+# --- COLONNE DROITE ---
+# Zone des symboles
+symbols_frame = tk.Frame(right_column, bg="#111724", padx=10, pady=15, borderwidth=1, relief="solid")
+symbols_frame.pack(fill="x", pady=10)
+
+symbols_label = ttk.Label(symbols_frame, text="Symbols", style="TLabel")
+symbols_label.pack(anchor="w")
+
+symbols_grid = tk.Frame(symbols_frame, bg="#111724", pady=10)
+symbols_grid.pack(fill="x")
+
+# Organisation des symboles en grille
+symbols = [
+    ('A', 0, 0), ('B', 0, 1), ('□', 0, 2), ('◇', 0, 3),
+    ('∧', 1, 0), ('∨', 1, 1), ('¬', 1, 2), ('→', 1, 3),
+    ('(', 2, 0), (')', 2, 1), ('DEL', 2, 2), ('CLR', 2, 3)
+]
+
+for sym, row, col in symbols:
+    button_style = "Symbol.TButton"
+    button_width = 6
+    if sym in ['DEL', 'CLR']:
+        command = lambda s=sym: delete_char() if s == 'DEL' else clear_entry()
+    else:
+        command = lambda s=sym: entry.insert(tk.END, s)
+    
+    # Créer un frame coloré pour le bouton
+    btn_frame = tk.Frame(symbols_grid, bg="#303950", padx=2, pady=2)
+    btn_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+    
+    # Créer le bouton dans le frame
+    btn = ttk.Button(btn_frame, text=sym, width=button_width, style=button_style, command=command)
+    btn.pack(fill="both", expand=True)
+
+# Configurer les poids des lignes et colonnes pour la grille des symboles
+for i in range(3):
+    symbols_grid.grid_rowconfigure(i, weight=1)
+for i in range(4):
+    symbols_grid.grid_columnconfigure(i, weight=1)
+
+# Fonctions pour les boutons DEL et CLR
+def delete_char():
+    current_text = entry.get()
+    if current_text:
+        entry.delete(len(current_text)-1, tk.END)
+
+def clear_entry():
+    entry.delete(0, tk.END)
+
+# Zone des actions
+actions_frame = tk.Frame(right_column, bg="#111724", padx=10, pady=15, borderwidth=1, relief="solid")
+actions_frame.pack(fill="x", pady=10)
+
+# Bouton test syntaxe
 def test_string():
     input_string = entry.get()
+    if not input_string:
+        result_label.config(text="Please enter an expression", foreground="orange")
+        return
+        
     accepted, message = run_dfa(input_string)
     result_label.config(text=message, foreground="green" if accepted else "red")
+    
+    # Mettre à jour l'historique
+    history_text.config(state="normal")
+    if history_text.get("1.0", "1.24") == "No history yet. Test some e":
+        history_text.delete("1.0", tk.END)
+    
+    history_text.insert("1.0", f"{input_string}: {message}\n")
+    history_text.config(state="disabled")
 
-# Fonction pour insérer un symbole dans l'entrée
-def insert_symbol(symbol):
-    entry.insert(tk.END, symbol)
+# Créer un frame bleu pour le bouton
+test_button_frame = tk.Frame(actions_frame, bg="#4a87ff", padx=2, pady=2)
+test_button_frame.pack(fill="x", pady=5)
 
-# Fonction pour quitter l'application
-def quit_app():
-    root.destroy()
+test_button = ttk.Button(test_button_frame, text="Test Expression", style="Action.TButton", command=test_string)
+test_button.pack(fill="x")
 
-# Création de l'interface graphique
-root = tk.Tk()
-root.title("Testeur d'automate")
-root.geometry("600x600")
-root.configure(bg="#2C3E50")
+# Bouton test vérité
+def test_veracite():
+    formule = entry.get()
+    if not formule:
+        result_label.config(text="Please enter an expression", foreground="orange")
+        return
+        
+    modele = modele_combo.get()
+    monde = world_combo.get()
+    R = generate_relation(modele, worlds)
+    model = {'R': R, 'V': valuation}
+    try:
+        verite = is_true(formule, monde, model)
+        msg = "✅ Formula is true in this world" if verite else "❌ Formula is false in this world"
+        result_label.config(text=msg, foreground="green" if verite else "red")
+        
+        # Mettre à jour l'historique
+        history_text.config(state="normal")
+        if history_text.get("1.0", "1.24") == "No history yet. Test some e":
+            history_text.delete("1.0", tk.END)
+        
+        history_text.insert("1.0", f"{formule} (in {modele}, world {monde}): {'True' if verite else 'False'}\n")
+        history_text.config(state="disabled")
+        
+    except Exception as e:
+        result_label.config(text=f"Error: {str(e)}", foreground="orange")
 
-# Style pour un look moderne
-style = ttk.Style()
-style.configure("TButton", font=("Arial", 12), padding=5)
-style.configure("TLabel", background="#2C3E50", foreground="white", font=("Arial", 12))
+# Créer un frame bleu pour le bouton
+verify_button_frame = tk.Frame(actions_frame, bg="#4a87ff", padx=2, pady=2)
+verify_button_frame.pack(fill="x", pady=5)
 
-# Conteneur principal
-main_frame = tk.Frame(root, bg="#2C3E50")
-main_frame.pack(pady=20)
+verify_button = ttk.Button(verify_button_frame, text="Verify Truth", style="Action.TButton", command=test_veracite)
+verify_button.pack(fill="x")
 
-# Label + Entrée utilisateur
-ttk.Label(main_frame, text="Entrez une chaîne :").grid(row=0, column=0, columnspan=3, pady=5)
-entry = ttk.Entry(main_frame, width=30, font=("Arial", 12))
-entry.grid(row=1, column=0, columnspan=3, pady=5)
+# Bouton pour afficher le modèle
+# Créer un frame bleu pour le bouton
+view_model_button_frame = tk.Frame(actions_frame, bg="#4a87ff", padx=2, pady=2)
+view_model_button_frame.pack(fill="x", pady=5)
 
-# Boutons de sélection des symboles
-symbols = ['A', '□', '◇', '→', '∧', '∨', '¬','B','(',')']
-symbol_frame = tk.Frame(main_frame, bg="#2C3E50")
-symbol_frame.grid(row=2, column=0, columnspan=3, pady=10)
+view_model_button = ttk.Button(view_model_button_frame, text="View Model", style="Action.TButton", command=lambda: toggle_model_image())
+view_model_button.pack(fill="x")
 
-for i, sym in enumerate(symbols):
-    ttk.Button(symbol_frame, text=sym, width=4, command=lambda s=sym: insert_symbol(s)).grid(row=i // 4, column=i % 4, padx=5, pady=5)
+# Bouton pour effacer l'historique
+def clear_history():
+    history_text.config(state="normal")
+    history_text.delete("1.0", tk.END)
+    history_text.insert("1.0", "No history yet. Test some expressions.")
+    history_text.config(state="disabled")
 
-# Bouton "Tester"
-test_button = ttk.Button(main_frame, text="Tester la syntaxe", command=test_string)
-test_button.grid(row=3, column=0, columnspan=3, pady=10)
+# Créer un frame bleu pour le bouton
+clear_history_button_frame = tk.Frame(actions_frame, bg="#4a87ff", padx=2, pady=2)
+clear_history_button_frame.pack(fill="x", pady=5)
 
-# Boutton "Tester la veracite"
-veracite_button = ttk.Button(main_frame, text="Tester la veracite", command=test_string)
-veracite_button.grid(row=3, column=3, columnspan=3, pady=10)
+clear_history_button = ttk.Button(clear_history_button_frame, text="Clear History", style="Action.TButton", command=clear_history)
+clear_history_button.pack(fill="x")
 
+# Zone d'information
+info_frame = tk.Frame(right_column, bg="#111724", padx=10, pady=15, borderwidth=1, relief="solid")
+info_frame.pack(fill="both", expand=True, pady=10)
 
-# Label pour afficher le résultat
-result_label = ttk.Label(main_frame, text="", font=("Arial", 14, "bold"))
-result_label.grid(row=4, column=0, columnspan=3, pady=10)
+info_label = ttk.Label(info_frame, text="Information", style="TLabel")
+info_label.pack(anchor="w")
 
+info_text = tk.Text(info_frame, bg="#1e2130", fg="white", font=("Arial", 12), height=4, wrap="word", borderwidth=0)
+info_text.pack(fill="both", expand=True, pady=5)
+info_text.insert("1.0", "This calculator tests modal logic expressions against a deterministic finite automaton.")
+info_text.config(state="disabled")
 
-# Bouton "Quitter"
-quit_button = ttk.Button(main_frame ,text="Quitter" ,command=quit_app)
-quit_button.grid(row=5, column=0, columnspan=3, pady=10)
+# Affichage du résultat
+result_frame = tk.Frame(root, bg="#0e1117", pady=10)
+result_frame.pack(fill="x", side="bottom")
 
-# Lancer l'application
+result_label = ttk.Label(result_frame, text="", font=("Arial", 14, "bold"), background="#0e1117")
+result_label.pack(pady=5)
+
+# Cadre pour le fond semi-transparent
+overlay_frame = None
+# Cadre pour l'image
+image_frame = None
+
+# Fonction pour fermer l'overlay
+def close_overlay(event=None):
+    global overlay_frame
+    if overlay_frame and overlay_frame.winfo_exists():
+        overlay_frame.destroy()
+        overlay_frame = None
+
+# Fonction pour afficher/masquer l'image du modèle
+def toggle_model_image():
+    global overlay_frame, image_frame
+    
+    # Si l'image est déjà affichée, la masquer
+    if overlay_frame and overlay_frame.winfo_exists():
+        close_overlay()
+        return
+    
+    # Obtenir l'image pour le modèle sélectionné
+    model_type = modele_combo.get()
+    image = get_model_image(model_type)
+    photo = ImageTk.PhotoImage(image)
+    
+    # Créer un cadre semi-transparent qui couvre toute la fenêtre
+    overlay_frame = tk.Frame(root)
+    overlay_frame.place(x=0, y=0, relwidth=1, relheight=1)
+    
+    # Configurer le fond semi-transparent
+    overlay_canvas = tk.Canvas(overlay_frame, highlightthickness=0)
+    overlay_canvas.pack(fill="both", expand=True)
+    
+    # Créer un rectangle semi-transparent (alpha=50%)
+    overlay_canvas.create_rectangle(0, 0, root.winfo_width(), root.winfo_height(), 
+                                   fill="#000000", stipple="gray50")
+    
+    # Calculer les coordonnées pour centrer l'image
+    window_width = root.winfo_width()
+    window_height = root.winfo_height()
+    image_width, image_height = image.width, image.height
+    x_position = (window_width - image_width) // 2
+    y_position = (window_height - image_height) // 2
+    
+    # Créer un cadre blanc pour l'image
+    image_frame = tk.Frame(overlay_frame, bg="black")
+    image_frame.place(x=x_position, y=y_position, width=image_width, height=image_height)
+    
+    # Créer un label pour afficher l'image
+    image_label = tk.Label(image_frame, image=photo, bg="black")
+    image_label.image = photo  # Garder une référence pour éviter la garbage collection
+    image_label.pack(fill="both", expand=True)
+    
+    # Configuration améliorée des événements pour fermer l'overlay
+    # Cliquer sur le canvas de fond ferme l'overlay
+    overlay_canvas.bind("<Button-1>", close_overlay)
+    
+    # Stopper la propagation du clic sur l'image
+    def stop_propagation(event):
+        return "break"
+    
+    # Empêcher la propagation des clics sur l'image et son contenu
+    image_frame.bind("<Button-1>", stop_propagation)
+    image_label.bind("<Button-1>", stop_propagation)
+    
+    # Ajouter un bouton de fermeture en haut à droite de l'image
+    close_button = ttk.Button(image_frame, text="X", width=3, command=close_overlay)
+    close_button.place(x=image_width-30, y=0)
+
+# Actualiser l'image lors du changement de modèle si l'image est affichée
+def on_model_change(event):
+    if overlay_frame and overlay_frame.winfo_exists():
+        close_overlay()  # Fermer l'image actuelle
+        root.after(100, toggle_model_image)  # Afficher la nouvelle image après un court délai
+
+modele_combo.bind("<<ComboboxSelected>>", on_model_change)
+
+# S'assurer que la fenêtre est bien affichée avant de tenter d'afficher des overlays
+root.update_idletasks()
+
 root.mainloop()
